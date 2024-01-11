@@ -15,12 +15,14 @@ beautifulsoup4==4.12.2
 bleach==6.1.0
 certifi==2023.11.17
 cffi==1.16.0
+cfgv==3.4.0
 charset-normalizer==3.3.2
 click==8.1.7
 comm==0.2.1
 debugpy==1.8.0
 decorator==5.1.1
 defusedxml==0.7.1
+distlib==0.3.8
 exceptiongroup==1.2.0
 executing==2.0.1
 fake-faces-generator @ git+https://github.com/plachert/fake-faces-generator@5683599420c218e927ce290d7fbd5cbdbabadc70
@@ -29,6 +31,7 @@ filelock==3.13.1
 fqdn==1.5.1
 frozenlist==1.4.1
 fsspec==2023.12.2
+identify==2.5.33
 idna==3.6
 ipykernel==6.28.0
 ipython==8.20.0
@@ -64,6 +67,7 @@ nbconvert==7.14.1
 nbformat==5.9.2
 nest-asyncio==1.5.8
 networkx==3.2.1
+nodeenv==1.8.0
 notebook==7.0.6
 notebook_shim==0.2.3
 numpy==1.26.3
@@ -85,7 +89,9 @@ packaging==23.2
 pandocfilters==1.5.0
 parso==0.8.3
 pexpect==4.9.0
+pillow==10.2.0
 platformdirs==4.1.0
+pre-commit==3.6.0
 prometheus-client==0.19.0
 prompt-toolkit==3.0.43
 psutil==5.9.7
@@ -116,6 +122,7 @@ tinycss2==1.2.1
 tomli==2.0.1
 torch==2.1.2
 torchmetrics==1.3.0
+torchvision==0.16.2
 tornado==6.4
 tqdm==4.66.1
 traitlets==5.14.1
@@ -124,6 +131,7 @@ types-python-dateutil==2.8.19.20240106
 typing_extensions==4.9.0
 uri-template==1.3.0
 urllib3==2.1.0
+virtualenv==20.25.0
 wcwidth==0.2.13
 webcolors==1.13
 webencodings==0.5.1
