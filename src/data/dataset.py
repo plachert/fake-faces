@@ -1,4 +1,5 @@
 import pathlib
+from typing import List
 
 import cv2
 import torch
@@ -8,9 +9,9 @@ from torch.utils.data import Dataset
 class ThisPersonDoesNotExistDatset(Dataset):
     """Dataset with unique samples from https://thispersondoesnotexist.com"""
 
-    def __init__(self, data_path: pathlib.Path, transform=None) -> None:
+    def __init__(self, img_paths: List[pathlib.Path], transform=None) -> None:
         super().__init__()
-        self.img_paths = list(data_path.glob("*.jpg"))
+        self.img_paths = img_paths
         self.transform = transform
 
     def __len__(self):
@@ -28,10 +29,3 @@ class ThisPersonDoesNotExistDatset(Dataset):
         img = torch.from_numpy(img_rgb)
         img_channel_first = img.permute(2, 0, 1)  # channel last to channel first
         return img_channel_first.to(dtype=torch.float32)
-
-
-if __name__ == "__main__":
-    ds = ThisPersonDoesNotExistDatset(
-        pathlib.Path("/home/piotr/datasets/vision/fake_faces")
-    )
-    print(ds[0])
