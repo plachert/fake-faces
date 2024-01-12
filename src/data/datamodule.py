@@ -43,7 +43,7 @@ class ThisPersonDoesNotExistDataModule(L.LightningDataModule):
                 train_list, transform=self.train_transform
             )
             self.val_set = ThisPersonDoesNotExistDatset(
-                train_list, transform=self.val_transform
+                val_list, transform=self.val_transform
             )
         else:
             self.test_set = ThisPersonDoesNotExistDatset(
