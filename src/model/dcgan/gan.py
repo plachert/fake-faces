@@ -35,18 +35,18 @@ class GAN(L.LightningModule):
         return [opt_d, opt_g], []
 
     def training_step(self, batch, batch_idx):
-        real_imgs, _ = batch
+        real_imgs = batch
         batch_size = real_imgs.shape[0]
 
         optimizer_d, optimizer_g = self.optimizers()
 
         # sample noise
-        noise = torch.randn(batch_size, self.hparams.latent_dim)
+        noise = torch.randn(batch_size, self.hparams.noise_dim)
         noise = noise.type_as(real_imgs)
         generated_imgs = self(noise)
 
         ## Logging
-        sample_imgs = self.generated_imgs[:6]
+        sample_imgs = generated_imgs[:6]
         grid = torchvision.utils.make_grid(sample_imgs)
         self.logger.experiment.add_image("generated_images", grid, 0)
         ##
@@ -56,15 +56,17 @@ class GAN(L.LightningModule):
         real_pred = self.discriminator(real_imgs)
         d_loss = torch.mean(generated_pred) - torch.mean(real_pred)
         optimizer_d.zero_grad()
-        self.manual_backward()
+        self.manual_backward(d_loss)
         optimizer_d.step()
+        for parameter in self.discriminator.parameters():
+            parameter.data.clamp_(-0.01, 0.01)  # grad clipping
         ###
 
         ### Generator ###
         generated_pred = self.discriminator(generated_imgs)
         g_loss = -torch.mean(generated_pred)
         optimizer_g.zero_grad()
-        self.manual_backward()
+        self.manual_backward(g_loss)
         optimizer_g.step()
         ###
 
