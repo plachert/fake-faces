@@ -1,8 +1,7 @@
 import pathlib
 from typing import List
 
-import cv2
-import torch
+from PIL import Image
 from torch.utils.data import Dataset
 
 
@@ -24,8 +23,6 @@ class ThisPersonDoesNotExistDatset(Dataset):
         return img
 
     def _read_image(self, path: pathlib.Path):
-        img_bgr = cv2.imread(str(path))
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        img = torch.from_numpy(img_rgb)
-        img_channel_first = img.permute(2, 0, 1)  # channel last to channel first
-        return img_channel_first.to(dtype=torch.float32)
+        with open(path, "rb") as f:
+            img = Image.open(f)
+            return img.convert("RGB")
