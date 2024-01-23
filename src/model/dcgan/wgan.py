@@ -19,15 +19,19 @@ class WGAN(L.LightningModule):
         b2: float = 0.9,
         n_critic: int = 5,
         critic_autoencoder: bool = False,
+        logging_interval: int = 100,
+        logging_images: int = 32,
     ):
         super().__init__()
         self.save_hyperparameters()
         self.generator = Generator(noise_dim, image_shape)
         self.critic = Critic(noise_dim, image_shape)
         self.automatic_optimization = False  # We need more flexibility with GANs
-        self.fixed_noise = torch.randn(128, self.hparams.noise_dim)
         self._initialize_weights()
-        self.k = 0
+
+    def on_train_start(self):
+        self.fixed_noise = torch.randn(128, self.hparams.noise_dim)
+        self.logging_step = 0
 
     def _initialize_weights(self):
         for m in self.modules():
@@ -92,31 +96,25 @@ class WGAN(L.LightningModule):
         generator_optimizer.step()
         return generator_losses
 
+    def _log(self, real_imgs, batch_idx):
+        if batch_idx % self.hparams.logging_interval == 0:
+            fixed_generated = self(self.fixed_noise.type_as(real_imgs)).detach()
+            sample_imgs = fixed_generated[: self.hparams.logging_images]
+            grid = torchvision.utils.make_grid(sample_imgs, normalize=True)
+            self.logger.experiment.add_image(
+                "generated_images", grid, self.logging_step
+            )
+
+            sample_imgs = real_imgs[: self.hparams.logging_images]
+            grid = torchvision.utils.make_grid(sample_imgs, normalize=True)
+            self.logger.experiment.add_image("real_images", grid, self.logging_step)
+            self.logging_step += 1
+
     def training_step(self, batch, batch_idx):
         real_imgs = batch
         optimizer_c, optimizer_g = self.optimizers()
         generated_imgs, critic_loss = self._train_critic(optimizer_c, real_imgs)
-
-        ## Logging
-        interval = 100
-        if batch_idx % interval == 0:
-            fixed_generated = self(self.fixed_noise.type_as(real_imgs)).detach()
-            sample_imgs = fixed_generated[:32]
-            grid = torchvision.utils.make_grid(sample_imgs, normalize=True)
-            self.logger.experiment.add_image("generated_images", grid, self.k)
-
-            sample_imgs = real_imgs[:32]
-            grid = torchvision.utils.make_grid(sample_imgs, normalize=True)
-            self.logger.experiment.add_image("real_images", grid, self.k)
-            self.k += 1
-        ##
-
+        self._log(real_imgs, batch_idx)
         generator_losses = self._train_generator(optimizer_g, generated_imgs, real_imgs)
-
         losses = critic_loss | generator_losses
-
         self.log_dict(losses, prog_bar=True)
-
-
-if __name__ == "__main__":
-    gan = WGAN()
