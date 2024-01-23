@@ -4,8 +4,9 @@ import torch.nn as nn
 
 
 class Critic(nn.Module):
-    def __init__(self,  hidden_channels: int, image_shape: Tuple[int]):
+    def __init__(self, hidden_channels: int, image_shape: Tuple[int]):
         super().__init__()
+        self.hidden_channels = hidden_channels
         self.in_channels, self.in_height, self.in_width = image_shape[-3:]
         self.encode = nn.Sequential(
             nn.Conv2d(
@@ -21,7 +22,6 @@ class Critic(nn.Module):
         self.critic = nn.Conv2d(
             self.hidden_channels, 1, kernel_size=1, stride=1, padding=0
         )
-        self._initialize_weights()
 
     def _make_layers(self):
         """Generate all encoding blocks."""
