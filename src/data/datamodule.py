@@ -25,15 +25,29 @@ class ThisPersonDoesNotExistDataModule(L.LightningDataModule):
     def __init__(
         self,
         data_dir: pathlib.Path,
-        batch_size: int = 64,
-        num_workers: int = 4,
+        batch_size: int = 32,
+        num_workers: int = 16,
+        img_shape: Tuple[int, int] = (64, 64),
     ):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.train_transform = transforms.Resize(size=(500, 500), antialias=True)
-        self.val_transform = transforms.Resize(size=(500, 500), antialias=True)
+        self.train_transform = transforms.Compose(
+            [
+                transforms.Resize(size=img_shape, antialias=True),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+                transforms.RandomHorizontalFlip(0.5),
+            ]
+        )
+        self.val_transform = transforms.Compose(
+            [
+                transforms.Resize(size=img_shape, antialias=True),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+            ]
+        )
 
     def setup(self, stage=None) -> None:
         files = list(self.data_dir.glob("*.jpg"))
@@ -55,6 +69,7 @@ class ThisPersonDoesNotExistDataModule(L.LightningDataModule):
             self.train_set,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            shuffle=True,
         )
 
     def val_dataloader(self):
