@@ -18,6 +18,8 @@ class WGAN(L.LightningModule):
         b1: float = 0,
         b2: float = 0.9,
         n_critic: int = 5,
+        interpolation_epsilon: float = 0.3,
+        gradient_penalty_weight: float = 0.1,
         critic_autoencoder: bool = False,
         logging_interval: int = 100,
         logging_images: int = 32,
@@ -30,13 +32,18 @@ class WGAN(L.LightningModule):
         self._initialize_weights()
 
     def on_train_start(self):
-        self.fixed_noise = torch.randn(128, self.hparams.noise_dim)
+        self.fixed_noise = torch.randn(
+            self.hparams.logging_images, self.hparams.noise_dim
+        )
         self.logging_step = 0
 
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.BatchNorm2d)):
-                nn.init.normal_(m.weight.data, 0.0, 0.02)
+            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+                nn.init.normal_(m.weight, 0.0, 0.02)
+            if isinstance(m, nn.BatchNorm2d):
+                nn.init.normal_(m.weight, 0.0, 0.02)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, noise):
         return self.generator(noise)
@@ -53,6 +60,23 @@ class WGAN(L.LightningModule):
             betas=(b1, b2),
         )
         return [opt_c, opt_g, opt_ae], []
+
+    def _get_critic_gradient_penalty(self, real_imgs, generated_imgs):
+        """Enforce Lipschitz-1 continuity."""
+        epsilon = self.hparams.interpolation_epsilon
+        mixed_images = real_imgs * epsilon + generated_imgs * (1 - epsilon)
+        mixed_scores = self.critic(mixed_images)["critic_value"]
+        gradient = torch.autograd.grad(
+            inputs=mixed_images,
+            outputs=mixed_scores,
+            grad_outputs=torch.ones_like(mixed_scores),
+            create_graph=True,
+            retain_graph=True,
+        )[0]
+        gradient = gradient.view(len(gradient), -1)
+        gradient_norm = gradient.norm(2, dim=1)
+        penalty = torch.mean((gradient_norm - torch.ones_like(gradient_norm)) ** 2)
+        return penalty
 
     def _train_critic(self, critic_optimizer, real_imgs):
         batch_size = real_imgs.shape[0]
@@ -71,11 +95,13 @@ class WGAN(L.LightningModule):
             _, real_pred = critic_results["encoded"], critic_results["critic_value"]
 
             critic_loss = torch.mean(generated_pred) - torch.mean(real_pred)
+            critic_loss += (
+                self.hparams.gradient_penalty_weight
+                * self._get_critic_gradient_penalty(real_imgs, generated_imgs)
+            )
             critic_optimizer.zero_grad()
-            self.manual_backward(critic_loss)
+            self.manual_backward(critic_loss, retain_graph=True)
             critic_optimizer.step()
-            for parameter in self.critic.parameters():
-                parameter.data.clamp_(-0.01, 0.01)  # grad clipping
         return generated_imgs, {"critic_loss": critic_loss}
 
     def _train_generator(self, generator_optimizer, generated_imgs):

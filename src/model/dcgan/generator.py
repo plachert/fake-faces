@@ -64,3 +64,8 @@ class Generator(nn.Module):
     def forward(self, noise):
         input_ = self._prepare_input(noise)
         return self.gen(input_)
+
+
+if __name__ == "__main__":
+    m = Generator(100, (3, 512, 512))
+    breakpoint()
