@@ -4,8 +4,8 @@ import lightning as L
 import torch
 import torch.nn as nn
 import torchvision
-
 from model.dcgan.critic import Critic
+
 from src.model.dcgan.generator import Generator
 
 
@@ -19,7 +19,7 @@ class WGAN(L.LightningModule):
         b2: float = 0.9,
         n_critic: int = 5,
         interpolation_epsilon: float = 0.3,
-        gradient_penalty_weight: float = 0.1,
+        gradient_penalty_weight: float = 10.0,
         critic_autoencoder: bool = False,
         logging_interval: int = 100,
         logging_images: int = 32,
