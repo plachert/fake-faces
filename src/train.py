@@ -3,7 +3,7 @@ import pathlib
 import lightning as L
 from lightning.pytorch import loggers as pl_loggers
 
-from model.dcgan.wgan import WGAN
+from model.wgan.wgan import WGAN
 from src.data.datamodule import ThisPersonDoesNotExistDataModule
 
 
@@ -15,7 +15,7 @@ def main():
         img_shape=image_shape[-2:],
     )
     model = WGAN(image_shape=image_shape, critic_autoencoder=True)
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir="logs/wgan")
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir="logs/wgan", log_graph=True)
     trainer = L.Trainer(logger=tb_logger)
     trainer.fit(model, dm)
 
