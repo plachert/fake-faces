@@ -47,7 +47,12 @@ class WGAN(L.LightningModule):
         b2 = self.hparams.b2
         opt_c = torch.optim.Adam(self.critic.parameters(), lr=lr, betas=(b1, b2))
         opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
-        return [opt_c, opt_g], []
+        opt_ae = torch.optim.Adam(
+            list(self.critic.parameters()) + list(self.generator.parameters()),
+            lr=lr,
+            betas=(b1, b2),
+        )
+        return [opt_c, opt_g, opt_ae], []
 
     def _train_critic(self, critic_optimizer, real_imgs):
         batch_size = real_imgs.shape[0]
@@ -73,28 +78,30 @@ class WGAN(L.LightningModule):
                 parameter.data.clamp_(-0.01, 0.01)  # grad clipping
         return generated_imgs, {"critic_loss": critic_loss}
 
-    def _train_generator(self, generator_optimizer, generated_imgs, real_imgs):
+    def _train_generator(self, generator_optimizer, generated_imgs):
         critic_results = self.critic(generated_imgs)
-        noise, generated_pred = (
+        _, generated_pred = (
             critic_results["encoded"],
             critic_results["critic_value"],
         )
-        generator_loss_gan = -torch.mean(generated_pred)
-        generator_loss = generator_loss_gan
-        generator_losses = {"generator_loss": generator_loss}
-
-        if self.hparams.critic_autoencoder:
-            critic_results = self.critic(real_imgs)
-            noise, _ = critic_results["encoded"], critic_results["critic_value"]
-            reconstructed = self.generator(torch.squeeze(noise))
-            generator_loss_ae = torch.nn.functional.mse_loss(reconstructed, real_imgs)
-            generator_losses["generator_loss"] += generator_loss_ae
-            generator_losses["autoencoder_loss"] = generator_loss_ae
-
+        generator_loss = -torch.mean(generated_pred)
         generator_optimizer.zero_grad()
-        self.manual_backward(generator_losses["generator_loss"])
+        self.manual_backward(generator_loss)
         generator_optimizer.step()
-        return generator_losses
+        return {"generator_loss": generator_loss}
+
+    def _train_autoencoder(self, autoencoder_optimizer, real_imgs):
+        critic_results = self.critic(real_imgs)
+        noise, _ = (
+            critic_results["encoded"],
+            critic_results["critic_value"],
+        )
+        reconstructed = self.generator(torch.squeeze(noise))
+        autoencoder_loss = torch.nn.functional.mse_loss(real_imgs, reconstructed)
+        autoencoder_optimizer.zero_grad()
+        self.manual_backward(autoencoder_loss)
+        autoencoder_optimizer.step()
+        return {"autoencoder_loss": autoencoder_loss}
 
     def _log(self, real_imgs, batch_idx):
         if batch_idx % self.hparams.logging_interval == 0:
@@ -112,9 +119,13 @@ class WGAN(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         real_imgs = batch
-        optimizer_c, optimizer_g = self.optimizers()
+        optimizer_c, optimizer_g, optimizer_ae = self.optimizers()
         generated_imgs, critic_loss = self._train_critic(optimizer_c, real_imgs)
         self._log(real_imgs, batch_idx)
-        generator_losses = self._train_generator(optimizer_g, generated_imgs, real_imgs)
-        losses = critic_loss | generator_losses
+        generator_loss = self._train_generator(optimizer_g, generated_imgs)
+        if self.hparams.critic_autoencoder:
+            autoencoder_loss = self._train_autoencoder(optimizer_ae, real_imgs)
+        else:
+            autoencoder_loss = {}
+        losses = critic_loss | generator_loss | autoencoder_loss
         self.log_dict(losses, prog_bar=True)
