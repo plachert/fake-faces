@@ -3,16 +3,19 @@ import pathlib
 import lightning as L
 from lightning.pytorch import loggers as pl_loggers
 
+from model.dcgan.wgan import WGAN
 from src.data.datamodule import ThisPersonDoesNotExistDataModule
-from src.model.dcgan.gan import GAN
 
 
 def main():
+    image_shape = (3, 64, 64)
     dm = ThisPersonDoesNotExistDataModule(
-        data_dir=pathlib.Path("/home/piotr/datasets/vision/fake_faces")
+        data_dir=pathlib.Path("/home/piotr/datasets/vision/fake_faces"),
+        batch_size=32,
+        img_shape=image_shape[-2:],
     )
-    model = GAN()
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir="logs/")
+    model = WGAN(image_shape=image_shape, critic_autoencoder=True)
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir="logs/wgan")
     trainer = L.Trainer(logger=tb_logger)
     trainer.fit(model, dm)
 

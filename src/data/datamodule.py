@@ -26,7 +26,7 @@ class ThisPersonDoesNotExistDataModule(L.LightningDataModule):
         self,
         data_dir: pathlib.Path,
         batch_size: int = 32,
-        num_workers: int = 16,
+        num_workers: int = 2,
         img_shape: Tuple[int, int] = (64, 64),
     ):
         super().__init__()
@@ -70,6 +70,7 @@ class ThisPersonDoesNotExistDataModule(L.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=True,
+            pin_memory=True,
         )
 
     def val_dataloader(self):
