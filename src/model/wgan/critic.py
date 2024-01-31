@@ -54,9 +54,3 @@ class Critic(nn.Module):
         encoded = self.encode(feats)
         critic_value = self.critic(feats)
         return {"encoded": encoded, "critic_value": critic_value}
-
-
-if __name__ == "__main__":
-    m = Critic(100, (3, 64, 64))
-    breakpoint()
-    # breakpoint()
