@@ -36,13 +36,14 @@ class WGAN(L.LightningModule):
         self.fixed_noise = self.example_input_array
         self.logging_step = 0
 
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
-                nn.init.normal_(m.weight, 0.0, 0.02)
-            if isinstance(m, nn.BatchNorm2d):
-                nn.init.normal_(m.weight, 0.0, 0.02)
-                nn.init.constant_(m.bias, 0)
+    def training_step(self, batch, batch_idx):
+        real_imgs = batch
+        optimizer_c, optimizer_g = self.optimizers()
+        generated_imgs, critic_loss = self._train_critic(optimizer_c, real_imgs)
+        self._log(real_imgs, batch_idx)
+        generator_loss = self._train_generator(optimizer_g, generated_imgs)
+        losses = critic_loss | generator_loss
+        self.log_dict(losses, prog_bar=True)
 
     def forward(self, noise):
         return self.generator(noise)
@@ -54,6 +55,14 @@ class WGAN(L.LightningModule):
         opt_c = torch.optim.Adam(self.critic.parameters(), lr=lr, betas=(b1, b2))
         opt_g = torch.optim.Adam(self.generator.parameters(), lr=lr, betas=(b1, b2))
         return [opt_c, opt_g], []
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+                nn.init.normal_(m.weight, 0.0, 0.02)
+            if isinstance(m, nn.BatchNorm2d):
+                nn.init.normal_(m.weight, 0.0, 0.02)
+                nn.init.constant_(m.bias, 0)
 
     def _get_critic_gradient_penalty(self, real_imgs, generated_imgs):
         """Enforce 1-Lipschitz continuity."""
@@ -124,12 +133,3 @@ class WGAN(L.LightningModule):
             grid = torchvision.utils.make_grid(sample_imgs, normalize=True)
             self.logger.experiment.add_image("real_images", grid, self.logging_step)
             self.logging_step += 1
-
-    def training_step(self, batch, batch_idx):
-        real_imgs = batch
-        optimizer_c, optimizer_g = self.optimizers()
-        generated_imgs, critic_loss = self._train_critic(optimizer_c, real_imgs)
-        self._log(real_imgs, batch_idx)
-        generator_loss = self._train_generator(optimizer_g, generated_imgs)
-        losses = critic_loss | generator_loss
-        self.log_dict(losses, prog_bar=True)
