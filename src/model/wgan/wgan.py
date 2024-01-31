@@ -22,25 +22,25 @@ class WGAN(L.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
+        self.noise_dim = noise_dim
         self.generator = Generator(noise_dim, image_shape)
         self.critic = Critic(noise_dim, image_shape)
         self.automatic_optimization = False  # We need more flexibility with GANs
-        self.example_input_array = torch.randn(
-            self.hparams.logging_images, self.hparams.noise_dim
-        )
         self._initialize_weights()
 
-    def setup(self):
-        self.fixed_noise = self.example_input_array
-        self.logger = self.logger.experiment
+    def setup(self, stage):
         if not isinstance(self.logger, FaceLogger):
             raise TypeError("WGAN module can only work with FaceLogger")
+        self.logger.set_fixed_noise(self.noise_dim, self.device)
+
+    def on_train_end(self):
+        self.logger.save_last_images()
 
     def training_step(self, batch, batch_idx):
         real_imgs = batch
         optimizer_c, optimizer_g = self.optimizers()
         generated_imgs, critic_loss = self._train_critic(optimizer_c, real_imgs)
-        self.logger.log_images(real_imgs, self.generator, self.fixed_noise, batch_idx)
+        self.logger.log_images(real_imgs, self.generator, batch_idx)
         generator_loss = self._train_generator(optimizer_g, generated_imgs)
         losses = critic_loss | generator_loss
         self.log_dict(losses, prog_bar=True)
@@ -80,7 +80,7 @@ class WGAN(L.LightningModule):
         )[0]
         gradient = gradient.view(len(gradient), -1)
         gradient_norm = gradient.norm(2, dim=1)
-        penalty = torch.mean((gradient_norm - torch.ones_like(gradient_norm)) ** 2)
+        penalty = torch.mean((gradient_norm - 1.0) ** 2)
         return penalty
 
     def _train_critic(self, critic_optimizer, real_imgs):
