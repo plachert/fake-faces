@@ -3,9 +3,9 @@ from typing import Tuple
 import lightning as L
 import torch
 import torch.nn as nn
-import torchvision
 
 from model.wgan.critic import Critic
+from src.logger.face_logger import FaceLogger
 from src.model.wgan.generator import Generator
 
 
@@ -19,8 +19,6 @@ class WGAN(L.LightningModule):
         b2: float = 0.999,
         n_critic: int = 5,
         gradient_penalty_weight: float = 10.0,
-        logging_interval: int = 100,
-        logging_images: int = 32,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -32,15 +30,17 @@ class WGAN(L.LightningModule):
         )
         self._initialize_weights()
 
-    def on_train_start(self):
+    def setup(self):
         self.fixed_noise = self.example_input_array
-        self.logging_step = 0
+        self.logger = self.logger.experiment
+        if not isinstance(self.logger, FaceLogger):
+            raise TypeError("WGAN module can only work with FaceLogger")
 
     def training_step(self, batch, batch_idx):
         real_imgs = batch
         optimizer_c, optimizer_g = self.optimizers()
         generated_imgs, critic_loss = self._train_critic(optimizer_c, real_imgs)
-        self._log(real_imgs, batch_idx)
+        self.logger.log_images(real_imgs, self.generator, self.fixed_noise, batch_idx)
         generator_loss = self._train_generator(optimizer_g, generated_imgs)
         losses = critic_loss | generator_loss
         self.log_dict(losses, prog_bar=True)
@@ -120,16 +120,3 @@ class WGAN(L.LightningModule):
         self.manual_backward(generator_loss)
         generator_optimizer.step()
         return {"generator_loss": generator_loss}
-
-    def _log(self, real_imgs, batch_idx):
-        if batch_idx % self.hparams.logging_interval == 0:
-            fixed_generated = self(self.fixed_noise.type_as(real_imgs)).detach()
-            sample_imgs = fixed_generated[: self.hparams.logging_images]
-            grid = torchvision.utils.make_grid(sample_imgs, normalize=True)
-            self.logger.experiment.add_image(
-                "generated_images", grid, self.logging_step
-            )
-            sample_imgs = real_imgs[: self.hparams.logging_images]
-            grid = torchvision.utils.make_grid(sample_imgs, normalize=True)
-            self.logger.experiment.add_image("real_images", grid, self.logging_step)
-            self.logging_step += 1

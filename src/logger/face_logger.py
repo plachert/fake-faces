@@ -15,7 +15,8 @@ class FaceLogger(TensorBoardLogger):
         self.interval = interval
         self.step = 0
 
-    def log_images(self, real_images, fake_images, batch_idx):
+    def log_images(self, real_images, generator, noise, batch_idx):
+        fake_images = generator(noise).detach()
         if batch_idx % self.interval == 0:
             self._log_real(real_images)
             self._log_fake(fake_images)
