@@ -21,7 +21,12 @@ def main():
     log_dir = "logs/wgan"
     model = WGAN(image_shape=image_shape, noise_dim=noise_dim)
     tb_logger = FaceLogger(save_dir=log_dir, interval=50)
-    trainer = L.Trainer(logger=tb_logger, max_epochs=1, precision=16)
+    checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
+        every_n_train_steps=1000, filename="{epoch}"
+    )
+    trainer = L.Trainer(
+        logger=tb_logger, max_epochs=1, precision=16, callbacks=[checkpoint_callback]
+    )
     trainer.fit(model, dm)
 
 
