@@ -70,7 +70,7 @@ class WGAN(L.LightningModule):
             real_imgs
         )
         mixed_images = real_imgs * epsilon + generated_imgs * (1 - epsilon)
-        mixed_scores = self.critic(mixed_images)["critic_value"]
+        mixed_scores = self.critic(mixed_images)
         gradient = torch.autograd.grad(
             inputs=mixed_images,
             outputs=mixed_scores,
@@ -90,31 +90,23 @@ class WGAN(L.LightningModule):
             noise = noise.type_as(real_imgs)
             generated_imgs = self(noise)
             # generated
-            critic_results = self.critic(generated_imgs.detach())
-            noise, generated_pred = (
-                critic_results["encoded"],
-                critic_results["critic_value"],
-            )
+            generated_pred = self.critic(generated_imgs.detach())
             # real
-            critic_results = self.critic(real_imgs)
-            _, real_pred = critic_results["encoded"], critic_results["critic_value"]
+            real_pred = self.critic(real_imgs)
 
             critic_loss = torch.mean(generated_pred) - torch.mean(real_pred)
-            critic_loss += (
-                self.hparams.gradient_penalty_weight
-                * self._get_critic_gradient_penalty(real_imgs, generated_imgs)
-            )
+            if self.hparams.gradient_penalty_weight > 0:
+                critic_loss += (
+                    self.hparams.gradient_penalty_weight
+                    * self._get_critic_gradient_penalty(real_imgs, generated_imgs)
+                )
             critic_optimizer.zero_grad()
             self.manual_backward(critic_loss, retain_graph=True)
             critic_optimizer.step()
         return generated_imgs, {"critic_loss": critic_loss}
 
     def _train_generator(self, generator_optimizer, generated_imgs):
-        critic_results = self.critic(generated_imgs)
-        _, generated_pred = (
-            critic_results["encoded"],
-            critic_results["critic_value"],
-        )
+        generated_pred = self.critic(generated_imgs)
         generator_loss = -torch.mean(generated_pred)
         generator_optimizer.zero_grad()
         self.manual_backward(generator_loss)
