@@ -24,13 +24,6 @@ class Critic(nn.Module):
             nn.LeakyReLU(0.2),
             *self._make_extractor_layers(),
         )
-        self.encode = nn.Conv2d(
-            self.final_hidden_channels,
-            hidden_channels,
-            kernel_size=4,
-            stride=2,
-            padding=0,
-        )
         self.critic = nn.Conv2d(
             self.final_hidden_channels, 1, kernel_size=4, stride=2, padding=0
         )
@@ -51,6 +44,5 @@ class Critic(nn.Module):
 
     def forward(self, img):
         feats = self.feat_extractor(img)
-        encoded = self.encode(feats)
         critic_value = self.critic(feats)
-        return {"encoded": encoded, "critic_value": critic_value}
+        return critic_value

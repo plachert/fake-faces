@@ -31,7 +31,7 @@ class WGAN(L.LightningModule):
     def setup(self, stage):
         if not isinstance(self.logger, FaceLogger):
             raise TypeError("WGAN module can only work with FaceLogger")
-        self.logger.set_fixed_noise(self.noise_dim, self.device)
+        self.logger.set_fixed_noise(self.noise_dim, device=self.device)
 
     def on_train_end(self):
         self.logger.save_last_images()
@@ -39,9 +39,9 @@ class WGAN(L.LightningModule):
     def training_step(self, batch, batch_idx):
         real_imgs = batch
         optimizer_c, optimizer_g = self.optimizers()
-        generated_imgs, critic_loss = self._train_critic(optimizer_c, real_imgs)
+        noise, critic_loss = self._train_critic(optimizer_c, real_imgs)
         self.logger.log_images(real_imgs, self.generator, batch_idx)
-        generator_loss = self._train_generator(optimizer_g, generated_imgs)
+        generator_loss = self._train_generator(optimizer_g, noise)
         losses = critic_loss | generator_loss
         self.log_dict(losses, prog_bar=True)
 
@@ -66,11 +66,11 @@ class WGAN(L.LightningModule):
 
     def _get_critic_gradient_penalty(self, real_imgs, generated_imgs):
         """Enforce 1-Lipschitz continuity."""
-        epsilon = torch.rand(len(real_imgs), 1, 1, 1, requires_grad=True).type_as(
-            real_imgs
+        epsilon = torch.rand(
+            len(real_imgs), 1, 1, 1, requires_grad=True, device=self.device
         )
         mixed_images = real_imgs * epsilon + generated_imgs * (1 - epsilon)
-        mixed_scores = self.critic(mixed_images)["critic_value"]
+        mixed_scores = self.critic(mixed_images)
         gradient = torch.autograd.grad(
             inputs=mixed_images,
             outputs=mixed_scores,
@@ -85,38 +85,40 @@ class WGAN(L.LightningModule):
 
     def _train_critic(self, critic_optimizer, real_imgs):
         batch_size = real_imgs.shape[0]
-        for _ in range(self.hparams.n_critic):
-            noise = torch.randn(batch_size, self.hparams.noise_dim)
-            noise = noise.type_as(real_imgs)
-            generated_imgs = self(noise)
-            # generated
-            critic_results = self.critic(generated_imgs.detach())
-            noise, generated_pred = (
-                critic_results["encoded"],
-                critic_results["critic_value"],
-            )
+        should_retain = (
+            self.hparams.n_critic > 1
+        )  # this saves a bit space when we don't have to retain the graph
+        noise_tensor = torch.randn(
+            batch_size * self.hparams.n_critic,
+            self.hparams.noise_dim,
+            device=self.device,
+        )
+        generated_imgs_tensor = self(noise_tensor).detach()
+        for step in range(self.hparams.n_critic):
+            generated_imgs = generated_imgs_tensor[
+                step * batch_size : (step + 1) * batch_size, ...
+            ]
+            generated_pred = self.critic(generated_imgs)
             # real
-            critic_results = self.critic(real_imgs)
-            _, real_pred = critic_results["encoded"], critic_results["critic_value"]
+            real_pred = self.critic(real_imgs)
 
             critic_loss = torch.mean(generated_pred) - torch.mean(real_pred)
-            critic_loss += (
-                self.hparams.gradient_penalty_weight
-                * self._get_critic_gradient_penalty(real_imgs, generated_imgs)
-            )
-            critic_optimizer.zero_grad()
-            self.manual_backward(critic_loss, retain_graph=True)
+            if self.hparams.gradient_penalty_weight > 0:
+                critic_loss += (
+                    self.hparams.gradient_penalty_weight
+                    * self._get_critic_gradient_penalty(real_imgs, generated_imgs)
+                )
+            critic_optimizer.zero_grad(set_to_none=True)
+            self.manual_backward(critic_loss, retain_graph=should_retain)
             critic_optimizer.step()
-        return generated_imgs, {"critic_loss": critic_loss}
+        noise = noise_tensor[:batch_size, ...]  # just to feed the generator
+        return noise, {"critic_loss": critic_loss}
 
-    def _train_generator(self, generator_optimizer, generated_imgs):
-        critic_results = self.critic(generated_imgs)
-        _, generated_pred = (
-            critic_results["encoded"],
-            critic_results["critic_value"],
-        )
+    def _train_generator(self, generator_optimizer, noise):
+        generated_imgs = self.generator(noise)
+        generated_pred = self.critic(generated_imgs)
         generator_loss = -torch.mean(generated_pred)
-        generator_optimizer.zero_grad()
+        generator_optimizer.zero_grad(set_to_none=True)
         self.manual_backward(generator_loss)
         generator_optimizer.step()
         return {"generator_loss": generator_loss}
